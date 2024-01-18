@@ -1,4 +1,4 @@
-pip install -r requirements.txt
+%pip install -r requirements.txt
 
 import spacy
 python -m spacy download en_core_web_lg
