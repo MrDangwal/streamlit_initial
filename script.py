@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 
+
 def convert_to_review_links(product_link):
     if '/p/' in product_link:
         product_id = product_link.split('/p/')[-1].split('?')[0]
