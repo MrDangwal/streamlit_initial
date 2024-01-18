@@ -5,8 +5,11 @@ import spacy
 from wordcloud import WordCloud
 import streamlit as st
 
-# Download NLTK stopwords
-nltk.download('stopwords')
+# Download NLTK stopwords data if not available
+try:
+    nltk.data.find('corpora/stopwords.zip')
+except LookupError:
+    nltk.download('stopwords')
 
 # Download Spacy model
 spacy.cli.download("en_core_web_lg")
