@@ -1,64 +1,78 @@
-import pandas as pd
-from transformers import pipeline
-from tqdm import tqdm
-from joblib import Parallel, delayed
 import streamlit as st
+import pandas as pd
+import numpy as np
 
-# Load the language detection pipeline
-language_detection_pipe = pipeline(
-    "text-classification",
-    model="papluca/xlm-roberta-base-language-detection",
-    tokenizer="papluca/xlm-roberta-base-language-detection"
-)
+# Streamlit app title
+st.title("Data Analysis App")
 
-# Function to detect languages for a batch of texts
-def process_batch(batch_texts):
-    # Truncate long sequences before language detection
-    truncated_texts = [text[:512] if len(text) > 512 else text for text in batch_texts]
+# File uploader widget
+file = st.file_uploader("Upload a CSV or Excel file", type=["csv", "xlsx"])
 
-    # Detect languages for each batch and flatten the results
-    batch_languages = language_detection_pipe(truncated_texts)
+# Function to handle missing values
+def handle_missing_values(df):
+    st.subheader("Handling Missing Values")
+    # Display original data
+    st.write("Original Data:")
+    st.write(df)
 
-    return [result['label'] for result in batch_languages]
+    # Show number of missing values
+    missing_values = df.isnull().sum()
+    st.write("Number of Missing Values:")
+    st.write(missing_values)
 
-# Streamlit app code
-def main():
-    st.title("Language Detection App")
+    # Drop rows with missing values
+    df_cleaned = df.dropna()
+    st.write("Data after dropping missing values:")
+    st.write(df_cleaned)
 
-    # Upload CSV file
-    csv_file = st.file_uploader("Upload CSV file", type=["csv"])
+    # Impute missing values with mean
+    df_imputed = df.fillna(df.mean())
+    st.write("Data after imputing missing values with mean:")
+    st.write(df_imputed)
 
-    if csv_file is not None:
-        # Read the CSV file using pandas
-        df = pd.read_csv(csv_file)
+# Function to display basic statistics
+def display_statistics(df):
+    st.subheader("Basic Statistics")
+    st.write("Summary Statistics:")
+    st.write(df.describe())
 
-        # Process the data
-        st.write("Processing...")
+# Function to export data to CSV or Excel
+def export_data(df):
+    st.subheader("Export Data")
+    export_format = st.radio("Select export format:", ["CSV", "Excel"])
+    if export_format == "CSV":
+        csv_file = st.text_input("Enter CSV file name:", "exported_data.csv")
+        df.to_csv(csv_file, index=False)
+        st.success(f"Data exported to {csv_file}")
+    elif export_format == "Excel":
+        excel_file = st.text_input("Enter Excel file name:", "exported_data.xlsx")
+        df.to_excel(excel_file, index=False)
+        st.success(f"Data exported to {excel_file}")
 
-        # Calculate the batch size
-        batch_size = st.slider("Select batch size", min_value=1, max_value=len(df), value=len(df))
+# Main app logic
+if file is not None:
+    st.subheader("Uploaded Data")
+    # Read the uploaded file
+    if file.name.endswith(".csv"):
+        df = pd.read_csv(file)
+    elif file.name.endswith(".xlsx"):
+        df = pd.read_excel(file, engine="openpyxl")
+    else:
+        st.error("Unsupported file format. Please upload a CSV or Excel file.")
+        st.stop()
 
-        # Use joblib to parallelize processing
-        detected_languages = Parallel(n_jobs=-1)(
-            delayed(process_batch)(batch)
-            for batch in tqdm(list(Parallel(n_jobs=-1)(delayed(list)(df[i:i+batch_size]) for i in range(0, len(df), batch_size))))
-        )
+    # Display uploaded data
+    st.write(df)
 
-        # Flatten the results
-        detected_languages = [lang for batch in detected_languages for lang in batch]
+    # Data analysis options
+    analysis_options = st.sidebar.multiselect("Select analysis options:", ["Handle Missing Values", "Display Basic Statistics", "Export Data"])
 
-        # Add detected languages to the DataFrame
-        df["Detected_Language"] = detected_languages
+    # Perform selected analysis tasks
+    if "Handle Missing Values" in analysis_options:
+        handle_missing_values(df)
 
-        # Display the processed DataFrame
-        st.write("Processed DataFrame:")
-        st.write(df)
+    if "Display Basic Statistics" in analysis_options:
+        display_statistics(df)
 
-        # Save the DataFrame with detected languages to a new CSV file
-        output_csv_file = "output.csv"
-        df.to_csv(output_csv_file, index=False)
-
-        st.write(f"Language detection complete. Output saved to {output_csv_file}")
-
-if __name__ == "__main__":
-    main()
+    if "Export Data" in analysis_options:
+        export_data(df)
