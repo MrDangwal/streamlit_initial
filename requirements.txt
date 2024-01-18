@@ -1,4 +1,5 @@
 streamlit
-nltk
-spacy
-wordcloud
+pandas
+transformers
+tqdm
+joblib
