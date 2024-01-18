@@ -1,10 +1,3 @@
-%pip install -r requirements.txt
-
-import spacy
-python -m spacy download en_core_web_lg
-
-
-
 import re
 import string
 import nltk
@@ -12,8 +5,11 @@ import spacy
 from wordcloud import WordCloud
 import streamlit as st
 
+# Download NLTK stopwords
 nltk.download('stopwords')
 
+# Download Spacy model
+spacy.cli.download("en_core_web_lg")
 nlp = spacy.load("en_core_web_lg")
 stopwords = set(nltk.corpus.stopwords.words('english'))
 
