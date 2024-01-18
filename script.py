@@ -1,3 +1,4 @@
+import os
 import re
 import string
 import nltk
@@ -6,10 +7,13 @@ from wordcloud import WordCloud
 import streamlit as st
 
 # Download NLTK stopwords data if not available
+nltk_data_path = os.path.join(os.getcwd(), "nltk_data")
+nltk.data.path.append(nltk_data_path)
+
 try:
     nltk.data.find('corpora/stopwords.zip')
 except LookupError:
-    nltk.download('stopwords')
+    nltk.download('stopwords', download_dir=nltk_data_path)
 
 # Download Spacy model
 spacy.cli.download("en_core_web_lg")
@@ -20,6 +24,7 @@ def preprocess_text(text):
     text = text.lower()
     text = re.sub(f"[{re.escape(string.punctuation)}]", " ", text)
     return text
+
 
 def generate_word_cloud(text):
     wordcloud = WordCloud(width=800, height=400, background_color='white', stopwords=stopwords).generate(text)
