@@ -42,7 +42,7 @@ if file is not None:
 
     if convert_review_links:
         # Apply conversion functions and generate review types
-        df["Review Link"] = df["Url"].apply(convert_to_review_links)
+        df["Review Link"] = df["url"].apply(convert_to_review_links)
         df["Review Type 1"], df["Review Type 2"], df["Review Type 3"] = zip(*df["Review Link"].apply(generate_review_types))
 
         # Display the DataFrame with new columns
