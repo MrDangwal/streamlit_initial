@@ -1,81 +1,64 @@
-import os
-import re
-import string
-import nltk
-import spacy
-from wordcloud import WordCloud
+import pandas as pd
+from transformers import pipeline
+from tqdm import tqdm
+from joblib import Parallel, delayed
 import streamlit as st
 
-# Download NLTK stopwords data if not available
-nltk_data_path = os.path.join(os.getcwd(), "nltk_data")
-nltk.data.path.append(nltk_data_path)
+# Load the language detection pipeline
+language_detection_pipe = pipeline(
+    "text-classification",
+    model="papluca/xlm-roberta-base-language-detection",
+    tokenizer="papluca/xlm-roberta-base-language-detection"
+)
 
-try:
-    nltk.data.find('corpora/stopwords.zip')
-except LookupError:
-    nltk.download('stopwords', download_dir=nltk_data_path)
+# Function to detect languages for a batch of texts
+def process_batch(batch_texts):
+    # Truncate long sequences before language detection
+    truncated_texts = [text[:512] if len(text) > 512 else text for text in batch_texts]
 
-# Download Spacy model
-spacy.cli.download("en_core_web_lg")
-nlp = spacy.load("en_core_web_lg")
-stopwords = set(nltk.corpus.stopwords.words('english'))
+    # Detect languages for each batch and flatten the results
+    batch_languages = language_detection_pipe(truncated_texts)
 
-def preprocess_text(text):
-    text = text.lower()
-    text = re.sub(f"[{re.escape(string.punctuation)}]", " ", text)
-    return text
+    return [result['label'] for result in batch_languages]
 
-
-def generate_word_cloud(text):
-    wordcloud = WordCloud(width=800, height=400, background_color='white', stopwords=stopwords).generate(text)
-    st.image(wordcloud.to_image(), use_container_width=True)
-
-def filter_theme_words(text, theme, similarity_threshold=0.7):
-    theme_doc = nlp(theme)
-    theme_words = set(token.text for token in theme_doc if token.is_alpha)
-
-    doc = nlp(text)
-    theme_related_words = set()
-    for token in doc:
-        if token.text not in stopwords and token.is_alpha:
-            similarity = token.similarity(theme_doc)
-            if similarity > similarity_threshold:
-                theme_related_words.add(token.text)
-
-    theme_related_words = list(theme_related_words - theme_words)
-    return theme_related_words
-
-def filter_sentences(sentences, theme_related_words):
-    filtered_sentences = [sentence for sentence in sentences if any(word in sentence for word in theme_related_words)]
-    return filtered_sentences
-
+# Streamlit app code
 def main():
-    st.title("Theme Analysis App")
+    st.title("Language Detection App")
 
-    # Input widgets
-    input_text = st.text_area("Paste your input text here", height=200)
-    theme_name = st.text_input("Enter the Theme name")
+    # Upload CSV file
+    csv_file = st.file_uploader("Upload CSV file", type=["csv"])
 
-    # Process button
-    if st.button("Process"):
-        if not input_text or not theme_name:
-            st.warning("Please provide input text and theme name.")
-        else:
-            processed_text = preprocess_text(input_text)
+    if csv_file is not None:
+        # Read the CSV file using pandas
+        df = pd.read_csv(csv_file)
 
-            wordcloud = generate_word_cloud(processed_text)
+        # Process the data
+        st.write("Processing...")
 
-            theme_words = filter_theme_words(processed_text, theme_name)
+        # Calculate the batch size
+        batch_size = st.slider("Select batch size", min_value=1, max_value=len(df), value=len(df))
 
-            st.text("Filtered Theme Words:")
-            st.text(":*|".join(theme_words))
+        # Use joblib to parallelize processing
+        detected_languages = Parallel(n_jobs=-1)(
+            delayed(process_batch)(batch)
+            for batch in tqdm(list(Parallel(n_jobs=-1)(delayed(list)(df[i:i+batch_size]) for i in range(0, len(df), batch_size))))
+        )
 
-            sentences = input_text.split('.')  # Assuming each sentence ends with a period. You can adjust this based on your data.
-            filtered_sentences = filter_sentences(sentences, theme_words)
+        # Flatten the results
+        detected_languages = [lang for batch in detected_languages for lang in batch]
 
-            st.text("Filtered Sentences:")
-            for sentence in filtered_sentences:
-                st.text(sentence)
+        # Add detected languages to the DataFrame
+        df["Detected_Language"] = detected_languages
+
+        # Display the processed DataFrame
+        st.write("Processed DataFrame:")
+        st.write(df)
+
+        # Save the DataFrame with detected languages to a new CSV file
+        output_csv_file = "output.csv"
+        df.to_csv(output_csv_file, index=False)
+
+        st.write(f"Language detection complete. Output saved to {output_csv_file}")
 
 if __name__ == "__main__":
     main()
