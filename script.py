@@ -1,10 +1,18 @@
 import streamlit as st
 import pandas as pd
-from transformers import pipeline
+from transformers import pipeline, AutoModelForSequenceClassification, AutoTokenizer
 from tqdm import tqdm
 
 # Streamlit app title
 st.title("Language Detection App")
+
+# Function to download and cache the language detection pipeline
+@st.cache(allow_output_mutation=True)
+def get_language_detection_pipeline():
+    model_name = "papluca/xlm-roberta-base-language-detection"
+    model = AutoModelForSequenceClassification.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    return pipeline("text-classification", model=model, tokenizer=tokenizer)
 
 # File uploader widget
 file = st.file_uploader("Upload a CSV file", type=["csv"])
@@ -21,11 +29,7 @@ if file is not None:
     st.write(df)
 
     # Language detection pipeline
-    language_detection_pipe = pipeline(
-        "text-classification",
-        model="papluca/xlm-roberta-base-language-detection",
-        tokenizer="papluca/xlm-roberta-base-language-detection"
-    )
+    language_detection_pipe = get_language_detection_pipeline()
 
     # Set a target RAM usage (10 GB)
     target_ram_usage_gb = 10
@@ -68,6 +72,6 @@ if file is not None:
     st.write(df)
 
     # Display download link for the output CSV file
-    st.markdown(f"### [Download Processed Data](sandbox:/mnt/data/{output_csv_file})")
+    st.markdown(get_download_link(output_csv_file), unsafe_allow_html=True)
 
     st.success("Language detection complete. Output saved to 'output.csv'")
