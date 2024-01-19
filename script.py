@@ -8,19 +8,6 @@ import smtplib
 # Streamlit app title
 st.title("Email Validation App")
 
-# Function to check mailbox existence
-def check_mailbox(email, session):
-    url = f"https://mail.google.com/mail/gxlu?email={email}"
-    r = session.get(url)
-
-    try:
-        if r.headers['set-cookie'] != '':
-            return "Valid"
-    except:
-        pass
-
-    return "Invalid"
-
 # Function to check email syntax using regex
 def is_valid_email_syntax(email):
     email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
@@ -56,10 +43,6 @@ def validate_email(email):
 
     if not is_valid_smtp_server(parts[1]):
         return "SMTP Server Validation Failed"
-
-    mailbox_result = check_mailbox(email, session)
-    if mailbox_result != "Valid":
-        return mailbox_result
 
     return "Valid"
 
