@@ -14,6 +14,10 @@ def get_language_detection_pipeline():
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     return pipeline("text-classification", model=model, tokenizer=tokenizer)
 
+# Function to create a download link
+def get_download_link(output_csv_file):
+    return f'<a href="/mnt/data/{output_csv_file}" download="{output_csv_file}">Download Processed Data</a>'
+
 # File uploader widget
 file = st.file_uploader("Upload a CSV file", type=["csv"])
 
@@ -31,8 +35,8 @@ if file is not None:
     # Language detection pipeline
     language_detection_pipe = get_language_detection_pipeline()
 
-    # Set a target RAM usage (10 GB)
-    target_ram_usage_gb = 10
+    # Set a target RAM usage (5 GB)
+    target_ram_usage_gb = 5
 
     # Calculate the batch size to achieve the target RAM usage
     text_memory_usage_gb = 0.001  # Estimated memory usage per text
@@ -50,7 +54,7 @@ if file is not None:
             batch_texts = df[text_column][batch_start:batch_end].tolist()
 
             # Truncate long sequences before language detection
-            truncated_texts = [text[:512] if len(text) > 512 else text for text in batch_texts]
+            truncated_texts = [text[:256] if len(text) > 256 else text for text in batch_texts]
 
             # Detect languages for each batch and flatten the results
             batch_languages = language_detection_pipe(truncated_texts)
@@ -58,7 +62,7 @@ if file is not None:
             detected_languages.extend([result['label'] for result in batch_languages])
 
             # Update the progress bar
-            progress_bar.progress((batch_end / len(df)))
+            progress_bar.progress(batch_end / len(df))
 
     # Add detected languages to the DataFrame
     df["Detected_Language"] = detected_languages
