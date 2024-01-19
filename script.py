@@ -1,81 +1,81 @@
 import streamlit as st
 import pandas as pd
-from transformers import pipeline, AutoModelForSequenceClassification, AutoTokenizer
+import requests
+import re
+import dns.resolver
+import smtplib
 from tqdm import tqdm
 
 # Streamlit app title
-st.title("Language Detection App")
+st.title("Email Validation App")
 
-# Function to download and cache the language detection pipeline
-@st.cache(allow_output_mutation=True)
-def get_language_detection_pipeline():
-    model_name = "papluca/xlm-roberta-base-language-detection"
-    model = AutoModelForSequenceClassification.from_pretrained(model_name)
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    return pipeline("text-classification", model=model, tokenizer=tokenizer)
+# Function to check mailbox existence
+def check_mailbox(email, session):
+    url = f"https://mail.google.com/mail/gxlu?email={email}"
+    r = session.get(url)
 
-# Function to create a download link
-def get_download_link(output_csv_file):
-    return f'<a href="/mnt/data/{output_csv_file}" download="{output_csv_file}">Download Processed Data</a>'
+    try:
+        if r.headers['set-cookie'] != '':
+            return "Valid"
+    except:
+        pass
 
-# File uploader widget
-file = st.file_uploader("Upload a CSV file", type=["csv"])
+    return "Invalid"
 
-# User input for text column
-text_column = st.text_input("Enter the text column name for language detection:", "Review")
+# Function to check email syntax using regex
+def is_valid_email_syntax(email):
+    email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+    return bool(email_pattern.match(email))
 
-if file is not None:
-    # Read the uploaded file
-    df = pd.read_csv(file)
+# Function to check domain name using DNS records
+def is_valid_domain_with_dns(domain):
+    try:
+        answers = dns.resolver.resolve(domain, 'MX')
+        return bool(answers)
+    except dns.resolver.NXDOMAIN:
+        return False
 
-    # Display uploaded data
-    st.subheader("Uploaded Data")
-    st.write(df)
+# Function to check SMTP server
+def is_valid_smtp_server(domain):
+    try:
+        mx_records = dns.resolver.query(domain, 'MX')
+        mx_host = mx_records[0].exchange.to_text().rstrip('.')
+        smtp = smtplib.SMTP(timeout=5)
+        smtp.connect(mx_host)
+        return True
+    except:
+        return False
 
-    # Language detection pipeline
-    language_detection_pipe = get_language_detection_pipeline()
+# Function to validate email
+def validate_email(email):
+    if not is_valid_email_syntax(email):
+        return "Email Syntax Error"
 
-    # Set a target RAM usage (5 GB)
-    target_ram_usage_gb = 5
+    parts = email.split('@')
+    if len(parts) != 2 or not is_valid_domain_with_dns(parts[1]):
+        return "Incorrect Domain Name"
 
-    # Calculate the batch size to achieve the target RAM usage
-    text_memory_usage_gb = 0.001  # Estimated memory usage per text
-    max_batch_size = int(target_ram_usage_gb / text_memory_usage_gb)
-    batch_size = min(max_batch_size, len(df))  # Use the smaller of max_batch_size and the dataset size
+    if not is_valid_smtp_server(parts[1]):
+        return "SMTP Server Validation Failed"
 
-    detected_languages = []
+    mailbox_result = check_mailbox(email, session)
+    if mailbox_result != "Valid":
+        return mailbox_result
 
-    # Language detection progress bar
-    progress_bar = st.progress(0)
+    return "Valid"
 
-    with st.spinner("Detecting languages..."):
-        for batch_start in range(0, len(df), batch_size):
-            batch_end = min(batch_start + batch_size, len(df))
-            batch_texts = df[text_column][batch_start:batch_end].tolist()
+# Streamlit interface
+email_input = st.text_input("Enter email(s) separated by commas:")
+if st.button("Validate"):
+    emails = [e.strip() for e in email_input.split(",")]
 
-            # Truncate long sequences before language detection
-            truncated_texts = [text[:256] if len(text) > 256 else text for text in batch_texts]
-
-            # Detect languages for each batch and flatten the results
-            batch_languages = language_detection_pipe(truncated_texts)
-
-            detected_languages.extend([result['label'] for result in batch_languages])
-
-            # Update the progress bar
-            progress_bar.progress(batch_end / len(df))
-
-    # Add detected languages to the DataFrame
-    df["Detected_Language"] = detected_languages
-
-    # Save the DataFrame with detected languages to a new CSV file
-    output_csv_file = "output.csv"
-    df.to_csv(output_csv_file, index=False)
-
-    # Display the result
-    st.subheader("Result")
-    st.write(df)
-
-    # Display download link for the output CSV file
-    st.markdown(get_download_link(output_csv_file), unsafe_allow_html=True)
-
-    st.success("Language detection complete. Output saved to 'output.csv'")
+    if len(emails) == 1:
+        result = validate_email(emails[0])
+        st.write(f"Result for {emails[0]}: {result}")
+    elif len(emails) > 1:
+        report = {}
+        for email in tqdm(emails, desc="Validating emails"):
+            report[email] = validate_email(email)
+        st.write("Validation Report:")
+        for email, result in report.items():
+            st.write(f"{email}: {result}")
