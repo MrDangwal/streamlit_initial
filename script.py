@@ -1,177 +1,73 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
+from transformers import pipeline
+from tqdm import tqdm
 
 # Streamlit app title
-st.title("Enhanced Data Analysis and Cleaning App")
+st.title("Language Detection App")
 
 # File uploader widget
-file = st.file_uploader("Upload a CSV or Excel file", type=["csv", "xlsx"])
+file = st.file_uploader("Upload a CSV file", type=["csv"])
 
-# Function to handle missing values
-def handle_missing_values(df):
-    st.subheader("Handling Missing Values")
-    # Display original data
-    st.write("Original Data:")
-    st.write(df)
+# User input for text column
+text_column = st.text_input("Enter the text column name for language detection:", "Review")
 
-    # Show number of missing values
-    missing_values = df.isnull().sum()
-    st.write("Number of Missing Values:")
-    st.write(missing_values)
-
-    # Drop rows with missing values
-    df_cleaned = df.dropna()
-    st.write("Data after dropping missing values:")
-    st.write(df_cleaned)
-
-    # Impute missing values with mean
-    df_imputed = df.fillna(df.mean())
-    st.write("Data after imputing missing values with mean:")
-    st.write(df_imputed)
-
-# Function to display basic statistics
-def display_statistics(df):
-    st.subheader("Basic Statistics")
-    st.write("Summary Statistics:")
-    st.write(df.describe())
-
-# Function to visualize data using plots
-def visualize_data(df):
-    st.subheader("Visualizing Data")
-    # Histogram
-    st.write("Histogram:")
-    df.hist(figsize=(10, 8))
-    st.pyplot()
-
-    # Box plot
-    st.write("Box Plot:")
-    sns.set_theme(style="whitegrid")
-    plt.figure(figsize=(12, 8))
-    sns.boxplot(data=df)
-    st.pyplot()
-
-# Function to filter data based on user input
-def filter_data(df):
-    st.subheader("Filtering Data")
-    filter_column = st.selectbox("Select column to filter:", df.columns)
-    filter_value = st.text_input(f"Enter value to filter in {filter_column}:", "")
-    filtered_data = df[df[filter_column] == filter_value]
-    st.write("Filtered Data:")
-    st.write(filtered_data)
-
-# Function to handle duplicate rows
-def handle_duplicates(df):
-    st.subheader("Handling Duplicate Rows")
-    # Display original data
-    st.write("Original Data:")
-    st.write(df)
-
-    # Drop duplicate rows
-    df_no_duplicates = df.drop_duplicates()
-    st.write("Data after removing duplicate rows:")
-    st.write(df_no_duplicates)
-
-# Function to handle outliers
-def handle_outliers(df):
-    st.subheader("Handling Outliers")
-    # Display original data
-    st.write("Original Data:")
-    st.write(df)
-
-    # User input for outlier handling
-    outlier_column = st.selectbox("Select column to handle outliers:", df.columns)
-    lower_bound = st.number_input("Enter lower bound for outlier detection:", value=-np.inf)
-    upper_bound = st.number_input("Enter upper bound for outlier detection:", value=np.inf)
-
-    # Handle outliers
-    df_no_outliers = df[(df[outlier_column] >= lower_bound) & (df[outlier_column] <= upper_bound)]
-    st.write("Data after handling outliers:")
-    st.write(df_no_outliers)
-
-# Function to convert data types
-def convert_data_types(df):
-    st.subheader("Converting Data Types")
-    # Display original data types
-    st.write("Original Data Types:")
-    st.write(df.dtypes)
-
-    # User input for data type conversion
-    convert_column = st.selectbox("Select column to convert data type:", df.columns)
-    new_data_type = st.selectbox("Select new data type:", ["int64", "float64", "object", "bool", "datetime64[ns]"])
-
-    # Convert data type
-    df[convert_column] = df[convert_column].astype(new_data_type)
-    st.write("Data after data type conversion:")
-    st.write(df)
-
-# Function to reset the DataFrame to the original state
-def reset_dataframe(df):
-    st.subheader("Resetting DataFrame")
-    st.write("Original Data:")
-    st.write(original_df)
-
-# Function to remove specific words from text columns
-def remove_words(df):
-    st.subheader("Remove Specific Words from Text Columns")
-    # Display original data
-    st.write("Original Data:")
-    st.write(df)
-
-    # User input for word removal
-    text_column = st.selectbox("Select text column:", [col for col, dtype in zip(df.columns, df.dtypes) if dtype == "object"])
-    words_to_remove = st.text_input("Enter words to remove (comma-separated):", "")
-    words_to_remove_list = [word.strip() for word in words_to_remove.split(',')]
-
-    # Remove words from the selected text column
-    df[text_column] = df[text_column].apply(lambda x: ' '.join([word for word in x.split() if word.lower() not in words_to_remove_list]))
-    st.write(f"Data after removing specified words from {text_column}:")
-    st.write(df)
-
-# Main app logic
 if file is not None:
-    st.subheader("Uploaded Data")
     # Read the uploaded file
-    if file.name.endswith(".csv"):
-        original_df = pd.read_csv(file)
-    elif file.name.endswith(".xlsx"):
-        original_df = pd.read_excel(file, engine="openpyxl")
-    else:
-        st.error("Unsupported file format. Please upload a CSV or Excel file.")
-        st.stop()
+    df = pd.read_csv(file)
 
     # Display uploaded data
-    st.write(original_df)
+    st.subheader("Uploaded Data")
+    st.write(df)
 
-    # Data cleaning options
-    cleaning_options = st.sidebar.multiselect("Select data cleaning options:", ["Handle Missing Values", "Display Basic Statistics", "Visualize Data", "Filter Data", "Handle Duplicate Rows", "Handle Outliers", "Convert Data Types", "Remove Specific Words", "Reset DataFrame"])
+    # Language detection pipeline
+    language_detection_pipe = pipeline(
+        "text-classification",
+        model="papluca/xlm-roberta-base-language-detection",
+        tokenizer="papluca/xlm-roberta-base-language-detection"
+    )
 
-    # Perform selected data cleaning tasks
-    if "Handle Missing Values" in cleaning_options:
-        handle_missing_values(original_df)
+    # Set a target RAM usage (10 GB)
+    target_ram_usage_gb = 10
 
-    if "Display Basic Statistics" in cleaning_options:
-        display_statistics(original_df)
+    # Calculate the batch size to achieve the target RAM usage
+    text_memory_usage_gb = 0.001  # Estimated memory usage per text
+    max_batch_size = int(target_ram_usage_gb / text_memory_usage_gb)
+    batch_size = min(max_batch_size, len(df))  # Use the smaller of max_batch_size and the dataset size
 
-    if "Visualize Data" in cleaning_options:
-        visualize_data(original_df)
+    detected_languages = []
 
-    if "Filter Data" in cleaning_options:
-        filter_data(original_df)
+    # Language detection progress bar
+    progress_bar = st.progress(0)
 
-    if "Handle Duplicate Rows" in cleaning_options:
-        handle_duplicates(original_df)
+    with st.spinner("Detecting languages..."):
+        for batch_start in range(0, len(df), batch_size):
+            batch_end = min(batch_start + batch_size, len(df))
+            batch_texts = df[text_column][batch_start:batch_end].tolist()
 
-    if "Handle Outliers" in cleaning_options:
-        handle_outliers(original_df)
+            # Truncate long sequences before language detection
+            truncated_texts = [text[:512] if len(text) > 512 else text for text in batch_texts]
 
-    if "Convert Data Types" in cleaning_options:
-        convert_data_types(original_df)
+            # Detect languages for each batch and flatten the results
+            batch_languages = language_detection_pipe(truncated_texts)
 
-    if "Remove Specific Words" in cleaning_options:
-        remove_words(original_df)
+            detected_languages.extend([result['label'] for result in batch_languages])
 
-    if "Reset DataFrame" in cleaning_options:
-        reset_dataframe(original_df)
+            # Update the progress bar
+            progress_bar.progress((batch_end / len(df)))
+
+    # Add detected languages to the DataFrame
+    df["Detected_Language"] = detected_languages
+
+    # Save the DataFrame with detected languages to a new CSV file
+    output_csv_file = "output.csv"
+    df.to_csv(output_csv_file, index=False)
+
+    # Display the result
+    st.subheader("Result")
+    st.write(df)
+
+    # Display download link for the output CSV file
+    st.markdown(f"### [Download Processed Data](sandbox:/mnt/data/{output_csv_file})")
+
+    st.success("Language detection complete. Output saved to 'output.csv'")
