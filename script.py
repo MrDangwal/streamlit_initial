@@ -4,7 +4,6 @@ import requests
 import re
 import dns.resolver
 import smtplib
-from tqdm import tqdm
 
 # Streamlit app title
 st.title("Email Validation App")
@@ -74,7 +73,7 @@ if st.button("Validate"):
         st.write(f"Result for {emails[0]}: {result}")
     elif len(emails) > 1:
         report = {}
-        for email in tqdm(emails, desc="Validating emails"):
+        for email in emails:
             report[email] = validate_email(email)
         st.write("Validation Report:")
         for email, result in report.items():
